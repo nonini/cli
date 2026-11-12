@@ -1,6 +1,8 @@
 <?php
 
-namespace gipfl\Cli;
+namespace nonini\Cli;
+
+use RuntimeException;
 
 use function escapeshellarg;
 use function register_shutdown_function;
@@ -9,23 +11,23 @@ use function shell_exec;
 
 class TtyMode
 {
-    protected $originalMode;
+    protected ?string $originalMode = null;
 
-    public function enableCanonicalMode()
+    public function enableCanonicalMode(): static
     {
         $this->enableFeature('icanon');
 
         return $this;
     }
 
-    public function disableCanonicalMode()
+    public function disableCanonicalMode(): static
     {
         $this->disableFeature('icanon');
 
         return $this;
     }
 
-    public function enableFeature(...$feature)
+    public function enableFeature(string ...$feature): void
     {
         $this->preserve();
         $cmd = 'stty ';
@@ -36,7 +38,7 @@ class TtyMode
         shell_exec($cmd);
     }
 
-    public function disableFeature(...$feature)
+    public function disableFeature(string ...$feature): void
     {
         $this->preserve();
         $cmd = 'stty';
@@ -47,17 +49,19 @@ class TtyMode
         shell_exec($cmd);
     }
 
-    public function getCurrentMode()
+    public function getCurrentMode(): string
     {
-        return rtrim(shell_exec('stty -g'), PHP_EOL);
+        $modeString = shell_exec('stty -g');
+        if (! is_string($modeString)) {
+            throw new RuntimeException('stty -g gave no string');
+        }
+        return rtrim($modeString, PHP_EOL);
     }
 
     /**
      * Helper allowing to call stty only once for the mose used flags, icanon and echo
-     * @param bool $echo
-     * @return $this
      */
-    public function setPreferredMode($echo = true)
+    public function setPreferredMode(bool $echo = true): static
     {
         $this->preserve();
         if ($echo) {
@@ -72,20 +76,18 @@ class TtyMode
     /**
      * @internal
      */
-    public function preserve($force = false)
+    public function preserve(bool $force = false): void
     {
         if ($force || $this->originalMode === null) {
             $this->originalMode = $this->getCurrentMode();
-            register_shutdown_function([$this, 'restore']);
+            register_shutdown_function($this->restore(...));
         }
-
-        return $this;
     }
 
     /**
      * @internal
      */
-    public function restore()
+    public function restore(): void
     {
         if ($this->originalMode) {
             shell_exec('stty ' . escapeshellarg($this->originalMode));

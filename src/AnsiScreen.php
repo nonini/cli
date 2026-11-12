@@ -1,8 +1,12 @@
 <?php
 
-namespace gipfl\Cli;
+namespace nonini\Cli;
 
+use http\Exception\RuntimeException;
 use InvalidArgumentException;
+
+use function is_string;
+use function preg_replace;
 
 /**
  * Screen implementation for screens with ANSI escape code support
@@ -11,7 +15,7 @@ use InvalidArgumentException;
  */
 class AnsiScreen extends Screen
 {
-    const FG_COLORS = [
+    protected const FG_COLORS = [
         'black'       => '30',
         'darkgray'    => '1;30',
         'red'         => '31',
@@ -30,7 +34,7 @@ class AnsiScreen extends Screen
         'white'       => '1;37',
     ];
 
-    const BG_COLORS = [
+    protected const BG_COLORS = [
         'black'     => '40',
         'red'       => '41',
         'green'     => '42',
@@ -43,41 +47,44 @@ class AnsiScreen extends Screen
 
     /**
      * Remove all ANSI escape codes from a given string
-     * @param $string
-     * @return string|string[]|null
      */
-    public function stripAnsiCodes($string)
+    public function stripAnsiCodes(string $string): string
     {
-        return \preg_replace('/\e\[?.*?[@-~]/', '', $string);
+        $result = preg_replace('/\e\[?.*?[@-~]/', '', $string);
+        if (! is_string($result)) {
+            throw new RuntimeException("Failed to strip ANSI codes: $string");
+        }
+
+        return $result;
     }
 
-    public function clear()
+    public function clear(): string
     {
         return "\033[2J"   // Clear the whole screen
              . "\033[1;1H" // Move the cursor to row 1, column 1
              . "\033[1S";  // Scroll whole page up by 1 line (why?)
     }
 
-    public function colorize($text, $fgColor = null, $bgColor = null)
+    public function colorize(string $text, ?string $fgColor = null, ?string $bgColor = null): string
     {
         return $this->startColor($fgColor, $bgColor)
             . $text
             . "\033[0m"; // Reset color codes
     }
 
-    public function strlen($string)
+    public function strlen(string $string): int
     {
         return parent::strlen($this->stripAnsiCodes($string));
     }
 
-    public function underline($text)
+    public function underline(string $text): string
     {
         return "\033[4m"
           . $text
           . "\033[0m"; // Reset color codes
     }
 
-    protected function fgColor($color)
+    protected function fgColor(string $color): string
     {
         if (! \array_key_exists($color, static::FG_COLORS)) {
             throw new InvalidArgumentException(
@@ -88,7 +95,7 @@ class AnsiScreen extends Screen
         return static::FG_COLORS[$color];
     }
 
-    protected function bgColor($color)
+    protected function bgColor(string $color): string
     {
         if (! \array_key_exists($color, static::BG_COLORS)) {
             throw new InvalidArgumentException(
@@ -99,10 +106,11 @@ class AnsiScreen extends Screen
         return static::BG_COLORS[$color];
     }
 
-    protected function startColor($fgColor = null, $bgColor = null)
+    protected function startColor(?string $fgColor = null, ?string $bgColor = null): string
     {
         $parts = [];
-        if ($fgColor !== null
+        if (
+            $fgColor !== null
             && $bgColor !== null
             && ! \array_key_exists($bgColor, static::BG_COLORS)
             && \array_key_exists($bgColor, static::FG_COLORS)

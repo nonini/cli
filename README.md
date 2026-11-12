@@ -1,8 +1,7 @@
-gipfl\\Cli
-==========
+nonini\\Cli
+===========
 
-CLI-related library. Currently provides Process- and Screen-related helper
-classes.
+CLI-related library, providing Process- and Screen-related helper classes.
 
 Usage
 -----
@@ -10,12 +9,12 @@ Usage
 Just some usage examples. Please check our source code, as all useful public
 methods should carry a nice documentation.
 
-### Change the your process title
+### Change your process title
  
 This is what you'll see in your process list:
 
 ```php
-use gipfl\Cli\Process;
+use nonini\Cli\Process;
 
 Process::setTitle('mydaemon: doing something');
 ```
@@ -32,7 +31,7 @@ Process::restart();
 ### Do more with your CLI screen
 
 ```php
-use gipfl\Cli\Screen;
+use nonini\Cli\Screen;
 
 $screen = Screen::instance();
 echo $screen->center($screen->underline('Hello world'));

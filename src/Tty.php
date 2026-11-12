@@ -1,54 +1,34 @@
 <?php
 
-namespace gipfl\Cli;
+namespace nonini\Cli;
 
-use InvalidArgumentException;
-use React\EventLoop\LoopInterface;
+use React\EventLoop\Loop;
 use React\Stream\ReadableResourceStream;
 use React\Stream\WritableResourceStream;
 use RuntimeException;
+
 use function defined;
 use function fstat;
-use function function_exists;
-use function is_bool;
 use function is_resource;
-use function is_string;
-use function posix_isatty;
 use function register_shutdown_function;
 use function stream_isatty;
 use function stream_set_blocking;
-use function strlen;
-use function var_export;
 
 class Tty
 {
-    protected $stdin;
+    protected ?ReadableResourceStream $stdin = null;
+    protected ?WritableResourceStream $stdout = null;
+    protected ?TtyMode $ttyMode = null;
+    protected bool $echo = true;
 
-    protected $stdout;
-
-    protected $loop;
-
-    protected $echo = true;
-
-    /** @var TtyMode */
-    protected $ttyMode;
-
-    public function __construct(LoopInterface $loop)
+    public function __construct()
     {
-        $this->loop = $loop;
-        register_shutdown_function([$this, 'restore']);
-        $loop->futureTick(function () {
-            $this->initialize();
-        });
+        register_shutdown_function($this->restore(...));
+        Loop::futureTick($this->initialize(...));
     }
 
-    public function setEcho($echo)
+    public function setEcho(bool $echo): static
     {
-        if (! is_bool($echo) && ! is_string($echo) && strlen($echo) !== 1) {
-            throw new InvalidArgumentException(
-                "\$echo must be boolean or a single character, got " . var_export($echo, 1)
-            );
-        }
         $this->echo = $echo;
         if ($this->ttyMode) {
             if ($echo) {
@@ -61,68 +41,62 @@ class Tty
         return $this;
     }
 
-    public function stdin()
+    public function stdin(): ReadableResourceStream
     {
         if ($this->stdin === null) {
             $this->assertValidStdin();
-            $this->stdin = new ReadableResourceStream(STDIN, $this->loop);
+            $this->stdin = new ReadableResourceStream(STDIN);
         }
 
         return $this->stdin;
     }
 
-    protected function hasStdin()
+    protected function hasStdin(): bool
     {
         return defined('STDIN') && is_resource(STDIN) && fstat(STDIN) !== false;
     }
 
-    protected function assertValidStdin()
+    protected function assertValidStdin(): void
     {
         if (! $this->hasStdin()) {
             throw new RuntimeException('I have no STDIN');
         }
     }
 
-    public function stdout()
+    public function stdout(): WritableResourceStream
     {
         if ($this->stdout === null) {
             $this->assertValidStdout();
-            $this->stdout = new WritableResourceStream(STDOUT, $this->loop);
+            $this->stdout = new WritableResourceStream(STDOUT);
         }
 
         return $this->stdout;
     }
 
-    protected function hasStdout()
+    protected function hasStdout(): bool
     {
         return defined('STDOUT') && is_resource(STDOUT) && fstat(STDOUT) !== false;
     }
 
-    protected function assertValidStdout()
+    protected function assertValidStdout(): void
     {
         if (! $this->hasStdout()) {
             throw new RuntimeException('I have no STDOUT');
         }
     }
 
-    protected function initialize()
+    protected function initialize(): void
     {
         $this->ttyMode = new TtyMode();
         $this->ttyMode->setPreferredMode($this->echo);
     }
 
-    public static function isSupported()
+    public static function isSupported(): bool
     {
-        if (PHP_VERSION_ID >= 70200) {
-            return stream_isatty(STDIN);
-        } elseif (function_exists('posix_isatty')) {
-            return posix_isatty(STDIN);
-        } else {
-            return false;
-        }
+        return stream_isatty(STDIN);
     }
 
-    public function restore()
+    public function restore(): void
     {
         if ($this->hasStdin()) {
             // ReadableResourceStream sets blocking to false, let's restore this

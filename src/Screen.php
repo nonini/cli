@@ -1,6 +1,20 @@
 <?php
 
-namespace gipfl\Cli;
+namespace nonini\Cli;
+
+use function array_key_exists;
+use function defined;
+use function exec;
+use function floor;
+use function function_exists;
+use function getenv;
+use function mb_strlen;
+use function posix_isatty;
+use function preg_match;
+use function setlocale;
+use function str_repeat;
+use function strlen;
+use function strpos;
 
 /**
  * Base class providing minimal CLI Screen functionality. While classes
@@ -15,22 +29,20 @@ namespace gipfl\Cli;
  */
 class Screen
 {
-    protected $isUtf8;
+    protected ?bool $isUtf8 = null;
 
     /**
      * Get a new Screen instance.
      *
      * For now this is limited to either a very basic Screen implementation as
      * a fall-back or an AnsiScreen implementation with more functionality
-     *
-     * @return AnsiScreen|Screen
      */
-    public static function factory()
+    public static function factory(): Screen|AnsiScreen
     {
         if (! defined('STDOUT')) {
             return new Screen();
         }
-        if (\function_exists('posix_isatty') && \posix_isatty(STDOUT)) {
+        if (function_exists('posix_isatty') && posix_isatty(STDOUT)) {
             return new AnsiScreen();
         } else {
             return new Screen();
@@ -39,16 +51,13 @@ class Screen
 
     /**
      * Center the given string horizontally on the current screen
-     *
-     * @param $string
-     * @return string
      */
-    public function center($string)
+    public function center(string $string): string
     {
         $len = $this->strlen($string);
-        $width = (int) \floor(($this->getColumns() + $len) / 2) - $len;
+        $width = (int) floor(($this->getColumns() + $len) / 2) - $len;
 
-        return \str_repeat(' ', $width) . $string;
+        return str_repeat(' ', $width) . $string;
     }
 
     /**
@@ -58,7 +67,7 @@ class Screen
      *
      * @return string
      */
-    public function clear()
+    public function clear(): string
     {
         return "\n";
     }
@@ -69,52 +78,38 @@ class Screen
      * only
      *
      * Returns the very same string, eventually enriched with related ANSI codes
-     *
-     * @param $text
-     * @param null $fgColor
-     * @param null $bgColor
-     *
-     * @return mixed
      */
-    public function colorize($text, $fgColor = null, $bgColor = null)
+    public function colorize(string $text, ?string $fgColor = null, ?string $bgColor = null): string
     {
         return $text;
     }
 
     /**
      * Generate $count newline characters
-     *
-     * @param int $count
-     * @return string
      */
-    public function newlines($count = 1)
+    public function newlines(int $count = 1): string
     {
-        return \str_repeat(PHP_EOL, $count);
+        return str_repeat(PHP_EOL, $count);
     }
 
     /**
      * Calculate the visible length of a given string. While this is simple on
      * a non-ANSI-screen, such implementation will be required to strip control
      * characters to get the correct result
-     *
-     * @param $string
-     * @return int
      */
-    public function strlen($string)
+    public function strlen(string $string): int
     {
         if ($this->isUtf8()) {
-            return \mb_strlen($string, 'UTF-8');
+            return mb_strlen($string, 'UTF-8');
         } else {
-            return \strlen($string);
+            return strlen($string);
         }
     }
 
     /**
      * Underline the given text - if possible
-     *
-     * @return string
      */
-    public function underline($text)
+    public function underline(string $text): string
     {
         return $text;
     }
@@ -122,15 +117,13 @@ class Screen
     /**
      * Get the number of currently available columns. Please note that this
      * might chance at any time while your program is running
-     *
-     * @return int
      */
-    public function getColumns()
+    public function getColumns(): int
     {
-        $cols = (int) \getenv('COLUMNS');
+        $cols = (int) getenv('COLUMNS');
         if (! $cols) {
             // stty -a ?
-            $cols = (int) \exec('tput cols');
+            $cols = (int) exec('tput cols');
         }
         if (! $cols) {
             $cols = 80;
@@ -142,15 +135,13 @@ class Screen
     /**
      * Get the number of currently available rows. Please note that this
      * might chance at any time while your program is running
-     *
-     * @return int
      */
-    public function getRows()
+    public function getRows(): int
     {
-        $rows = (int) \getenv('ROWS');
+        $rows = (int) getenv('ROWS');
         if (! $rows) {
             // stty -a ?
-            $rows = (int) \exec('tput lines');
+            $rows = (int) exec('tput lines');
         }
         if (! $rows) {
             $rows = 25;
@@ -162,27 +153,28 @@ class Screen
     /**
      * Whether we're on a UTF-8 screen. We assume latin1 otherwise, there is no
      * support for additional encodings
-     *
-     * @return bool
      */
-    public function isUtf8()
+    public function isUtf8(): bool
     {
         if ($this->isUtf8 === null) {
             // null should equal 0 here, however seems to equal '' on some systems:
-            $current = \setlocale(LC_ALL, 0);
+            $current = setlocale(LC_ALL, '0');
+            if ($current === false) {
+                return false;
+            }
 
             $parts = explode(';', $current);
             $lc_parts = [];
             foreach ($parts as $part) {
-                if (\strpos($part, '=') === false) {
+                if (!str_contains($part, '=')) {
                     continue;
                 }
                 list($key, $val) = explode('=', $part, 2);
                 $lc_parts[$key] = $val;
             }
 
-            $this->isUtf8 = \array_key_exists('LC_CTYPE', $lc_parts)
-                && \preg_match('~\.UTF-8$~i', $lc_parts['LC_CTYPE']);
+            $this->isUtf8 = array_key_exists('LC_CTYPE', $lc_parts)
+                && preg_match('~\.UTF-8$~i', $lc_parts['LC_CTYPE']);
         }
 
         return $this->isUtf8;
